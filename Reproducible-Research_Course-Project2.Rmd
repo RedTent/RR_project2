@@ -1,0 +1,96 @@
+---
+title: "Descriptive title"
+author: "Johan van Tent"
+date: "19-10-2019"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, echo = TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+
+# Questions
+# 
+# Your data analysis must address the following questions:
+# 
+# 1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most
+#    harmful with respect to population health?
+# 2. Across the United States, which types of events have the greatest economic consequences?
+
+```
+
+## Synopsis
+
+**synopsis** - 10 sentences max
+
+## Data Processing
+
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
+
+This Storm Dataset can be downloaded using this [link](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).
+
+```{r downloading-data}
+
+# download data if necessary - but only once
+
+if (!dir.exists("data")) dir.create("data")
+
+if (!file.exists("data/storm_data.bz2")) { 
+  download.file(url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
+                destfile = "data/storm_data.bz2")
+}
+```
+
+The Storm Dataset comes as compressed csv-file. It can be read into a dataframe using the `read_csv()`-function.
+
+```{r reading-data, cache=TRUE}
+
+# readr::read_csv can read zipped files directly
+
+storm_data <- read_csv("data/storm_data.bz2",
+                 col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S")))
+# # temporary
+# storm_data <- read_csv("data/storm_data",
+#                  col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"))) 
+
+```
+
+```{r inspecting-data}
+
+n_rows <- nrow(storm_data)
+n_vars <- ncol(storm_data)
+
+events_per
+
+```
+
+
+The first 
+
+
+
+```{r}
+# Selecting only events with harmful effects for people: At least 1 fatality or 1 injury
+harmful_events <- storm_data %>% filter(FATALITIES > 0 | INJURIES > 0)
+
+# Most occurring harmful events
+harmful_events %>% count(EVTYPE, sort = TRUE) %>%  top_n(10, wt = n)
+
+# Total fatalities by event
+harmful_events %>% group_by(EVTYPE) %>% tally(wt = FATALITIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+
+# Total injuries by event
+harmful_events %>% group_by(EVTYPE) %>% tally(wt = INJURIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+
+# Fatalities per event
+harmful_events %>% group_by(EVTYPE) %>% summarise(n = n(), avg_fatalities = mean(FATALITIES, na.rm = TRUE)) %>% arrange(desc(avg_fatalities)) %>% filter(n > 5 ) %>%  top_n(10, wt = avg_fatalities)
+
+
+```
+
+
+
+
+## Results
