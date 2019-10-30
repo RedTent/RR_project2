@@ -1,15 +1,15 @@
 ---
 title: "Descriptive title"
 author: "Johan van Tent"
-date: "19-10-2019"
+date: "2019-10-30"
 output: html_document
 editor_options: 
   chunk_output_type: console
 ---
 
 ```{r setup, echo = TRUE}
-knitr::opts_chunk$set(echo = TRUE)
-library(tidyverse)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+suppressPackageStartupMessages(library(tidyverse))
 
 # Questions
 # 
@@ -26,6 +26,8 @@ library(tidyverse)
 **synopsis** - 10 sentences max
 
 ## Data Processing
+
+### Downloading and reading
 
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
 
@@ -50,47 +52,116 @@ The Storm Dataset comes as compressed csv-file. It can be read into a dataframe 
 # readr::read_csv can read zipped files directly
 
 storm_data <- read_csv("data/storm_data.bz2",
-                 col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S")))
+                col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S")))
 # # temporary
-# storm_data <- read_csv("data/storm_data",
-#                  col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"))) 
+ # storm_data <- read_csv("data/storm_data",
+ #                  col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"))) 
 
 ```
+
+### Inspecting the data
 
 ```{r inspecting-data}
 
 n_rows <- nrow(storm_data)
 n_vars <- ncol(storm_data)
 
-events_per
+
+
+n_event_types <- length(unique(storm_data$EVTYPE))
 
 ```
 
+The storm dataset has:
 
-The first 
+- `r n_vars` variables
+- `r n_rows` rows 
+- `r n_event_types` unique event labels
+
+The first events were recorded in 1950. In general more events are recorded in recent years. This is shown in the graph below.
+
+```{r fig.cap="*Number of recorded events in the storm dataset*", fig.width = 8}
+  storm_data %>% 
+  mutate(year = lubridate::year(BGN_DATE)) %>% 
+  ggplot(aes(year)) + 
+  geom_bar() + 
+  labs(title = "Number of events per year")
+```
 
 
 
-```{r}
-# Selecting only events with harmful effects for people: At least 1 fatality or 1 injury
-harmful_events <- storm_data %>% filter(FATALITIES > 0 | INJURIES > 0)
+### Transformations
 
-# Most occurring harmful events
-harmful_events %>% count(EVTYPE, sort = TRUE) %>%  top_n(10, wt = n)
+In the variable `EVTYPE` there seem to be a number of different labels that refer to the same type of event, e.g. *THUNDERSTORM WIND* and *THUNDERSTORM WINDS*. It is therefore necessary to clean the labels of the events. For this analysis we're only interested in events that cause a lot of injuries or damage. Therefore we'll only relabel those events that occur often or cause a lot of damage or injuries.
 
-# Total fatalities by event
-harmful_events %>% group_by(EVTYPE) %>% tally(wt = FATALITIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+We're interested in preventing damage and casualties for future events. It seems reasonable to think that only recent events are relevant for this purpose. Therefore we choose to only include data from 2000 or later in the analysis.
 
-# Total injuries by event
-harmful_events %>% group_by(EVTYPE) %>% tally(wt = INJURIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+```{r relabeling-EVTYPE}
 
-# Fatalities per event
-harmful_events %>% group_by(EVTYPE) %>% summarise(n = n(), avg_fatalities = mean(FATALITIES, na.rm = TRUE)) %>% arrange(desc(avg_fatalities)) %>% filter(n > 5 ) %>%  top_n(10, wt = avg_fatalities)
+relabel_df <- tibble::tribble(
+               ~EVTYPE,         ~EVTYPE_NEW,
+  "THUNDERSTORM WINDS", "THUNDERSTORM WIND",
+           "TSTM WIND", "THUNDERSTORM WIND",
+      "EXCESSIVE HEAT",              "HEAT"
+  )
+
+
+storm_data_trans <- 
+  storm_data %>% 
+  left_join(relabel_df, by = "EVTYPE") %>% 
+  mutate(EVTYPE = ifelse(is.na(EVTYPE_NEW), EVTYPE, EVTYPE_NEW)) %>% 
+  filter(lubridate::year(BGN_DATE) >= 2000)
+
+
+
 
 
 ```
+
 
 
 
 
 ## Results
+
+```{r harmful-events, fig.width = 8, fig.cap="*The 10 most harmful events since 20000*"}
+# Selecting only events with harmful effects for people: At least 1 fatality or 1 injury. Selecting only data since 2000. Older
+harmful_events <- storm_data_trans %>% 
+  filter(FATALITIES > 0 | INJURIES > 0)
+
+# Most occurring harmful events
+# harmful_events %>% count(EVTYPE, sort = TRUE) %>%  top_n(10, wt = n)
+
+# Total fatalities and injuries by event
+# Total injuries by event
+# harmful_events %>% group_by(EVTYPE) %>% tally(wt = FATALITIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+
+# Determining and plotting the most harmful events
+harmful_events %>% 
+  group_by(EVTYPE) %>% 
+  summarise(Fatalities = sum(FATALITIES, na.rm = TRUE), 
+            Injuries = sum(INJURIES, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  arrange(desc(Fatalities)) %>% 
+  top_n(10, wt = Fatalities) %>% 
+  gather("harm_type", "n", -EVTYPE) %>% 
+  ggplot(aes(fct_rev(fct_inorder(EVTYPE)), n)) + 
+  geom_col() + 
+  facet_wrap(~harm_type, scales = "free") +
+  labs(title = "Most harmful events since 2000",
+       x = "",
+       y = "Number of casualties") +
+  coord_flip()
+
+  # theme(axis.text.x = element_text(angle = 270))
+
+
+
+# # Total injuries by event
+# harmful_events %>% group_by(EVTYPE) %>% tally(wt = INJURIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
+# 
+# # Fatalities per event
+# harmful_events %>% group_by(EVTYPE) %>% summarise(n = n(), avg_fatalities = mean(FATALITIES, na.rm = TRUE)) %>% arrange(desc(avg_fatalities)) %>% filter(n > 5 ) %>%  top_n(10, wt = avg_fatalities)
+
+
+```
