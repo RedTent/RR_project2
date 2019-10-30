@@ -52,7 +52,9 @@ The Storm Dataset comes as compressed csv-file. It can be read into a dataframe 
 # readr::read_csv can read zipped files directly
 
 storm_data <- read_csv("data/storm_data.bz2",
-                col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S")))
+                col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"),
+                                 PROPDMGEXP = col_character(),
+                                 CROPDMGEXP = col_character()))
 # # temporary
  # storm_data <- read_csv("data/storm_data",
  #                  col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"))) 
@@ -66,8 +68,6 @@ storm_data <- read_csv("data/storm_data.bz2",
 n_rows <- nrow(storm_data)
 n_vars <- ncol(storm_data)
 
-
-
 n_event_types <- length(unique(storm_data$EVTYPE))
 
 ```
@@ -80,7 +80,7 @@ The storm dataset has:
 
 The first events were recorded in 1950. In general more events are recorded in recent years. This is shown in the graph below.
 
-```{r fig.cap="*Number of recorded events in the storm dataset*", fig.width = 8}
+```{r event-count, fig.cap="*Number of recorded events in the storm dataset*", fig.width = 8}
   storm_data %>% 
   mutate(year = lubridate::year(BGN_DATE)) %>% 
   ggplot(aes(year)) + 
@@ -94,9 +94,11 @@ The first events were recorded in 1950. In general more events are recorded in r
 
 In the variable `EVTYPE` there seem to be a number of different labels that refer to the same type of event, e.g. *THUNDERSTORM WIND* and *THUNDERSTORM WINDS*. It is therefore necessary to clean the labels of the events. For this analysis we're only interested in events that cause a lot of injuries or damage. Therefore we'll only relabel those events that occur often or cause a lot of damage or injuries.
 
-We're interested in preventing damage and casualties for future events. It seems reasonable to think that only recent events are relevant for this purpose. Therefore we choose to only include data from 2000 or later in the analysis.
+We're interested in preventing damage and casualties for future events. It seems reasonable to think that only recent events are relevant for this purpose. Therefore we choose to only include data from 2000 or later in the analysis. Apart from that, it seems also likely that a lot of events are missing in earlier years.
 
-```{r relabeling-EVTYPE}
+Damage is expressed in thousands (K), millions (M) or billions (B). To be able to compare the amount of damage it is necessary to convert the damage to the same unit.
+
+```{r transformations}
 
 relabel_df <- tibble::tribble(
                ~EVTYPE,         ~EVTYPE_NEW,
@@ -105,36 +107,37 @@ relabel_df <- tibble::tribble(
       "EXCESSIVE HEAT",              "HEAT"
   )
 
-
 storm_data_trans <- 
   storm_data %>% 
   left_join(relabel_df, by = "EVTYPE") %>% 
   mutate(EVTYPE = ifelse(is.na(EVTYPE_NEW), EVTYPE, EVTYPE_NEW)) %>% 
-  filter(lubridate::year(BGN_DATE) >= 2000)
-
-
-
-
+  
+  filter(lubridate::year(BGN_DATE) >= 2000) %>% 
+  
+  mutate(CROPDMG = case_when(
+    CROPDMGEXP == "K" ~ CROPDMG * 1000,
+    CROPDMGEXP == "M" ~ CROPDMG * 1000 * 1000,
+    CROPDMGEXP == "B" ~ CROPDMG * 1000 * 1000 * 1000,
+    TRUE ~ CROPDMG),
+         PROPDMG = case_when(
+    PROPDMGEXP == "K" ~ PROPDMG * 1000,
+    PROPDMGEXP == "M" ~ PROPDMG * 1000 * 1000,
+    PROPDMGEXP == "B" ~ PROPDMG * 1000 * 1000 * 1000,
+    TRUE ~ PROPDMG)
+    )
 
 ```
 
 
-
-
-
 ## Results
 
-```{r harmful-events, fig.width = 8, fig.cap="*The 10 most harmful events since 20000*"}
-# Selecting only events with harmful effects for people: At least 1 fatality or 1 injury. Selecting only data since 2000. Older
+### Harmful events
+
+```{r harmful-events, fig.width = 10, fig.cap="*The 10 most harmful events since 2000*"}
+# Selecting only events with harmful effects for people: At least 1 fatality or 1 injury. 
 harmful_events <- storm_data_trans %>% 
   filter(FATALITIES > 0 | INJURIES > 0)
 
-# Most occurring harmful events
-# harmful_events %>% count(EVTYPE, sort = TRUE) %>%  top_n(10, wt = n)
-
-# Total fatalities and injuries by event
-# Total injuries by event
-# harmful_events %>% group_by(EVTYPE) %>% tally(wt = FATALITIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
 
 # Determining and plotting the most harmful events
 harmful_events %>% 
@@ -148,20 +151,36 @@ harmful_events %>%
   ggplot(aes(fct_rev(fct_inorder(EVTYPE)), n)) + 
   geom_col() + 
   facet_wrap(~harm_type, scales = "free") +
-  labs(title = "Most harmful events since 2000",
+  labs(title = "Most harmful event-types since 2000",
        x = "",
        y = "Number of casualties") +
   coord_flip()
 
-  # theme(axis.text.x = element_text(angle = 270))
 
+```
 
+### Economic damage
 
-# # Total injuries by event
-# harmful_events %>% group_by(EVTYPE) %>% tally(wt = INJURIES, sort = TRUE) %>% ungroup() %>% top_n(10, wt = n)
-# 
-# # Fatalities per event
-# harmful_events %>% group_by(EVTYPE) %>% summarise(n = n(), avg_fatalities = mean(FATALITIES, na.rm = TRUE)) %>% arrange(desc(avg_fatalities)) %>% filter(n > 5 ) %>%  top_n(10, wt = avg_fatalities)
+```{r damaging-events, fig.width = 8, fig.cap="*The 10 most damaging types of events*"}
+
+damaging_events <- storm_data_trans %>% 
+  filter(PROPDMG > 0 | CROPDMG > 0) %>% 
+  mutate(DAMAGE = PROPDMG + CROPDMG)
+
+damaging_events %>% 
+  group_by(EVTYPE) %>% 
+  summarise(DAMAGE = sum(DAMAGE, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  arrange(desc(DAMAGE)) %>% 
+  top_n(10, wt = DAMAGE) %>% 
+  ggplot(aes(fct_rev(fct_inorder(EVTYPE)), DAMAGE / 1000000000)) + 
+  geom_col() + 
+  labs(title = "Most damaging event-types since 2000",
+       x = "",
+       y = "Billions of Dollars") +
+  coord_flip()
 
 
 ```
+
+
