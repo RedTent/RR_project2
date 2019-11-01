@@ -1,10 +1,11 @@
 ---
-title: "Descriptive title"
+title: "Most harmful and damging weather events in the US since 2000"
 author: "Johan van Tent"
 date: "2019-10-30"
-output: html_document
-editor_options: 
-  chunk_output_type: console
+output:
+  html_document:
+    code_folding: "show"
+
 ---
 
 ```{r setup, echo = TRUE}
@@ -23,7 +24,8 @@ suppressPackageStartupMessages(library(tidyverse))
 
 ## Synopsis
 
-**synopsis** - 10 sentences max
+This analysis explores the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The first recorded weather events in the database go back to 1950 but most events are recorded in recent years. The analysis focuses on the type of weather events that have caused the most harm to humans and the most economic damage since 2000. Heat causes the most fatalities, but tornadoes are reported to cause the most injuries. Floods cause the largest amount of economic damage. Efforts to prevent damage or harm to humans should probably focus most on these types of weather events.
+
 
 ## Data Processing
 
@@ -31,7 +33,7 @@ suppressPackageStartupMessages(library(tidyverse))
 
 This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
 
-This Storm Dataset can be downloaded using this [link](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).
+The Storm Dataset can be downloaded using this [link](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).
 
 ```{r downloading-data}
 
@@ -109,11 +111,14 @@ relabel_df <- tibble::tribble(
 
 storm_data_trans <- 
   storm_data %>% 
+  # relabelling
   left_join(relabel_df, by = "EVTYPE") %>% 
   mutate(EVTYPE = ifelse(is.na(EVTYPE_NEW), EVTYPE, EVTYPE_NEW)) %>% 
   
+  # selecting only data from 2000 and later
   filter(lubridate::year(BGN_DATE) >= 2000) %>% 
   
+  # scaling the amount of damges all to the same unit of single dollars ($)
   mutate(CROPDMG = case_when(
     CROPDMGEXP == "K" ~ CROPDMG * 1000,
     CROPDMGEXP == "M" ~ CROPDMG * 1000 * 1000,
@@ -131,7 +136,11 @@ storm_data_trans <-
 
 ## Results
 
+The storm database con
+
 ### Harmful events
+
+The figure below shows the total amount of fatalities and injuries caused by weather events since 2000. Only the top-10 types of events that have caused the most fatalities are included.
 
 ```{r harmful-events, fig.width = 10, fig.cap="*The 10 most harmful events since 2000*"}
 # Selecting only events with harmful effects for people: At least 1 fatality or 1 injury. 
@@ -159,7 +168,13 @@ harmful_events %>%
 
 ```
 
+It can be seen that *heat* caused the most fatalities although *tornadoes* have caused almost as much fatalities. Both heat and tornadoes cause about twice or more fatalities than other types of events. Tornadoes are also reponsible for a large amount of injuries: thrice or more the amount of injuries caused by other events like heat or thunderstorm wind.
+
+Efforts to prevent harm to humans from weather events should probably focus most on heat and tornadoes.
+
 ### Economic damage
+
+The figure below shows the total amount of damage in billions of dollars caused by weather events since 2000. Only the top-10 types of events that have caused the most damage are included.
 
 ```{r damaging-events, fig.width = 8, fig.cap="*The 10 most damaging types of events*"}
 
@@ -183,4 +198,6 @@ damaging_events %>%
 
 ```
 
+From the figure it can be seen that floods cause by far the most damage, almost twice as much than the next type of event hurricanes. Hurricanes in turn cause more than twice as much damage than other weather events, floods excluded of course.
 
+Efforts to prevent economic damage should probably focus most on floods and hurricanes.
