@@ -1,37 +1,34 @@
 ---
-title: "Most harmful and damging weather events in the US since 2000"
+title: "Most harmful and most damaging weather events in the US since 2000"
 author: "Johan van Tent"
-date: "2019-10-30"
+date: "2019-11-01"
 output:
   html_document:
+    toc: TRUE
+    toc_float: TRUE
     code_folding: "show"
 
 ---
+
+**Synopsis**
+
+This analysis explores the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The first recorded weather events in the database go back to 1950 but most events are recorded in recent years. The analysis focuses on the type of weather events that have caused the most harm to humans and the most economic damage since 2000. Heat causes the most fatalities, but tornadoes are reported to cause the most injuries. Floods cause the largest amount of economic damage. Efforts to prevent damage or harm to humans should probably focus most on these types of weather events.
+
+**NOTE:** *This a course project for the Reproducible Research course on Coursera.*
 
 ```{r setup, echo = TRUE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 suppressPackageStartupMessages(library(tidyverse))
 
-# Questions
-# 
-# Your data analysis must address the following questions:
-# 
-# 1. Across the United States, which types of events (as indicated in the EVTYPE variable) are most
-#    harmful with respect to population health?
-# 2. Across the United States, which types of events have the greatest economic consequences?
-
 ```
 
-## Synopsis
+## Introduction
 
-This analysis explores the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. The first recorded weather events in the database go back to 1950 but most events are recorded in recent years. The analysis focuses on the type of weather events that have caused the most harm to humans and the most economic damage since 2000. Heat causes the most fatalities, but tornadoes are reported to cause the most injuries. Floods cause the largest amount of economic damage. Efforts to prevent damage or harm to humans should probably focus most on these types of weather events.
-
+This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
 
 ## Data Processing
 
 ### Downloading and reading
-
-This project involves exploring the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database. This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage.
 
 The Storm Dataset can be downloaded using this [link](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2).
 
@@ -41,9 +38,9 @@ The Storm Dataset can be downloaded using this [link](https://d396qusza40orc.clo
 
 if (!dir.exists("data")) dir.create("data")
 
-if (!file.exists("data/storm_data.bz2")) { 
+if (!file.exists("data/storm_data.csv.bz2")) { 
   download.file(url = "https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2",
-                destfile = "data/storm_data.bz2")
+                destfile = "data/storm_data.csv.bz2")
 }
 ```
 
@@ -53,7 +50,7 @@ The Storm Dataset comes as compressed csv-file. It can be read into a dataframe 
 
 # readr::read_csv can read zipped files directly
 
-storm_data <- read_csv("data/storm_data.bz2",
+storm_data <- read_csv("data/storm_data.csv.bz2",
                 col_types = cols(BGN_DATE = col_date("%m/%d/%Y %H:%M:%S"),
                                  PROPDMGEXP = col_character(),
                                  CROPDMGEXP = col_character()))
@@ -96,9 +93,9 @@ The first events were recorded in 1950. In general more events are recorded in r
 
 In the variable `EVTYPE` there seem to be a number of different labels that refer to the same type of event, e.g. *THUNDERSTORM WIND* and *THUNDERSTORM WINDS*. It is therefore necessary to clean the labels of the events. For this analysis we're only interested in events that cause a lot of injuries or damage. Therefore we'll only relabel those events that occur often or cause a lot of damage or injuries.
 
-We're interested in preventing damage and casualties for future events. It seems reasonable to think that only recent events are relevant for this purpose. Therefore we choose to only include data from 2000 or later in the analysis. Apart from that, it seems also likely that a lot of events are missing in earlier years.
+We're interested in preventing damage and casualties for future events. It seems reasonable to assume that only recent events are relevant for this purpose. Therefore we choose to only include data from 2000 or later in the analysis. Apart from that, it seems also likely that a lot of events are not recorded in earlier years.
 
-Damage is expressed in thousands (K), millions (M) or billions (B). To be able to compare the amount of damage it is necessary to convert the damage to the same unit.
+Damage is expressed in thousands (K), millions (M) or billions (B) of dollars. To be able to compare the amount of damage it is necessary to convert the damage to the same unit.
 
 ```{r transformations}
 
@@ -111,7 +108,7 @@ relabel_df <- tibble::tribble(
 
 storm_data_trans <- 
   storm_data %>% 
-  # relabelling
+  # relabelling EVTYPE
   left_join(relabel_df, by = "EVTYPE") %>% 
   mutate(EVTYPE = ifelse(is.na(EVTYPE_NEW), EVTYPE, EVTYPE_NEW)) %>% 
   
@@ -135,8 +132,6 @@ storm_data_trans <-
 
 
 ## Results
-
-The storm database con
 
 ### Harmful events
 
@@ -176,7 +171,7 @@ Efforts to prevent harm to humans from weather events should probably focus most
 
 The figure below shows the total amount of damage in billions of dollars caused by weather events since 2000. Only the top-10 types of events that have caused the most damage are included.
 
-```{r damaging-events, fig.width = 8, fig.cap="*The 10 most damaging types of events*"}
+```{r damaging-events, fig.width = 8, fig.cap="*The 10 most damaging types of events since 2000*"}
 
 damaging_events <- storm_data_trans %>% 
   filter(PROPDMG > 0 | CROPDMG > 0) %>% 
